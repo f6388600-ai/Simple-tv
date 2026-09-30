@@ -1,6 +1,42 @@
 (() => {
   "use strict";
 
+  /* =========================================================
+     PREMIUM SIMPLE IPTV
+     Supports:
+     - HLS / M3U8
+     - MP4 / WebM / OGG
+     - YouTube
+     - Vimeo
+     - Dailymotion
+     - DASH / MPD via dash.js
+     - LocalStorage channels
+     - Search
+     - Category
+     - Sorting
+     - Dark / Light mode
+     ========================================================= */
+
+  /* =========================
+     BUILT-IN CHANNELS
+     ========================= */
+
+  const BUILTIN_CHANNELS = [
+    {
+      id: "bd-tv-27",
+      name: "BD TV",
+      category: "Bangla",
+      logo: "",
+      url: "http://livetv.akr4m.com:8080/bdtv/restrem/27.m3u8",
+      type: "hls"
+    }
+  ];
+
+
+  /* =========================
+     APP STATE
+     ========================= */
+
   const state = {
     channels: [],
     filtered: [],
@@ -9,295 +45,1540 @@
     sort: "default",
     current: null,
     hls: null,
+    dash: null,
     theme: localStorage.getItem("iptv_theme") || "dark"
   };
 
-  const $ = (s) => document.querySelector(s);
-  const channelGrid = $("#channelGrid");
-  const categoryRow = $("#categoryRow");
-  const emptyState = $("#emptyState");
-  const resultCount = $("#resultCount");
-  const searchInput = $("#searchInput");
-  const searchWrap = $(".search-wrap");
-  const playerModal = $("#playerModal");
-  const video = $("#videoPlayer");
-  const iframe = $("#embedPlayer");
-  const loading = $("#loadingOverlay");
-  const errorOverlay = $("#errorOverlay");
-  const errorText = $("#errorText");
-  const toast = $("#toast");
 
-  document.documentElement.classList.toggle("light", state.theme === "light");
-  $("#themeBtn").textContent = state.theme === "light" ? "☀" : "☾";
+  /* =========================
+     HELPERS
+     ========================= */
+
+  const $ = (selector) => document.querySelector(selector);
+
+  const $$ = (selector) => {
+    return Array.from(document.querySelectorAll(selector));
+  };
+
+  function slug(text) {
+    return String(text || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function escapeHTML(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function isValidUrl(url) {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function isHttp(url) {
+    return /^https?:\/\//i.test(url);
+  }
+
+  function getInitials(name) {
+    const words = String(name || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (!words.length) return "TV";
+
+    if (words.length === 1) {
+      return words[0].slice(0, 2).toUpperCase();
+    }
+
+    return (
+      words[0][0] +
+      words[words.length - 1][0]
+    ).toUpperCase();
+  }
+
+
+  /* =========================
+     CHANNEL LOADER
+     ========================= */
 
   function safeChannels() {
-    const defaults = Array.isArray(window.DEFAULT_CHANNELS) ? window.DEFAULT_CHANNELS : [];
-    const local = JSON.parse(localStorage.getItem("simple_iptv_channels") || "[]");
-    return [...defaults, ...local].filter(c => c && c.name && c.url).map((c, i) => ({
-      id: c.id || `${slug(c.name)}-${i}`,
-      name: String(c.name),
-      category: String(c.category || "Other"),
-      logo: String(c.logo || ""),
-      url: String(c.url),
-      type: String(c.type || "auto").toLowerCase()
-    }));
+    let local = [];
+
+    try {
+      local = JSON.parse(
+        localStorage.getItem("simple_iptv_channels") || "[]"
+      );
+
+      if (!Array.isArray(local)) {
+        local = [];
+      }
+    } catch (error) {
+      console.warn("Invalid localStorage channel data:", error);
+      local = [];
+    }
+
+    const external =
+      Array.isArray(window.DEFAULT_CHANNELS)
+        ? window.DEFAULT_CHANNELS
+        : [];
+
+    const allChannels = [
+      ...BUILTIN_CHANNELS,
+      ...external,
+      ...local
+    ];
+
+    const cleaned = allChannels
+      .filter((channel) => {
+        return (
+          channel &&
+          channel.name &&
+          channel.url &&
+          isValidUrl(String(channel.url))
+        );
+      })
+      .map((channel, index) => ({
+        id:
+          channel.id ||
+          `${slug(channel.name)}-${index}`,
+
+        name: String(channel.name),
+
+        category:
+          String(channel.category || "Other"),
+
+        logo:
+          String(channel.logo || ""),
+
+        url:
+          String(channel.url),
+
+        type:
+          String(channel.type || "auto")
+            .toLowerCase()
+            .trim()
+      }));
+
+    /* Remove duplicate IDs / duplicate URLs */
+
+    const unique = [];
+
+    for (const channel of cleaned) {
+      const duplicate = unique.some(
+        (item) =>
+          item.id === channel.id ||
+          item.url === channel.url
+      );
+
+      if (!duplicate) {
+        unique.push(channel);
+      }
+    }
+
+    return unique;
   }
 
-  function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 
-  function initials(name) {
-    const p = name.trim().split(/\s+/).slice(0, 2);
-    return p.map(x => x[0]).join("").toUpperCase() || "TV";
+  /* =========================
+     SAVE LOCAL CHANNEL
+     ========================= */
+
+  function saveLocalChannel(channel) {
+    let local = [];
+
+    try {
+      local = JSON.parse(
+        localStorage.getItem("simple_iptv_channels") || "[]"
+      );
+
+      if (!Array.isArray(local)) {
+        local = [];
+      }
+    } catch {
+      local = [];
+    }
+
+    local.push(channel);
+
+    localStorage.setItem(
+      "simple_iptv_channels",
+      JSON.stringify(local)
+    );
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  }
+
+  /* =========================
+     DETECT STREAM TYPE
+     ========================= */
 
   function detectType(channel) {
-    if (channel.type !== "auto") return channel.type;
-    const u = channel.url.toLowerCase().split("?")[0];
-    if (u.includes("youtube.com") || u.includes("youtu.be") || u.includes("vimeo.com") || u.includes("dailymotion.com")) return "embed";
-    if (u.endsWith(".m3u8") || u.includes(".m3u8/")) return "hls";
-    if (u.endsWith(".mpd") || u.includes(".mpd/")) return "dash";
-    if (/\.(mp4|webm|ogg|ogv|m4v|mov)(\?|$)/i.test(channel.url)) return "video";
-    if (/^https?:\/\/.+/i.test(channel.url)) return "video";
+    const explicit = String(channel.type || "auto")
+      .toLowerCase();
+
+    if (explicit !== "auto") {
+      return explicit;
+    }
+
+    const url = String(channel.url || "")
+      .toLowerCase();
+
+    /* Remove query string for extension checking */
+
+    const cleanUrl = url.split("?")[0].split("#")[0];
+
+    /* HLS */
+
+    if (
+      cleanUrl.endsWith(".m3u8") ||
+      url.includes(".m3u8?")
+    ) {
+      return "hls";
+    }
+
+    /* DASH */
+
+    if (
+      cleanUrl.endsWith(".mpd") ||
+      url.includes(".mpd?")
+    ) {
+      return "dash";
+    }
+
+    /* Direct browser video */
+
+    if (
+      /\.(mp4|webm|ogg|ogv|m4v|mov)$/i.test(cleanUrl)
+    ) {
+      return "video";
+    }
+
+    /* YouTube */
+
+    if (
+      /youtube\.com|youtu\.be/i.test(url)
+    ) {
+      return "embed";
+    }
+
+    /* Vimeo */
+
+    if (
+      /vimeo\.com/i.test(url)
+    ) {
+      return "embed";
+    }
+
+    /* Dailymotion */
+
+    if (
+      /dailymotion\.com|dai\.ly/i.test(url)
+    ) {
+      return "embed";
+    }
+
+    /*
+      Unknown HTTP stream.
+
+      Browser video element will try it.
+    */
+
+    if (isHttp(url)) {
+      return "video";
+    }
+
     return "embed";
   }
 
-  function categories() {
-    return ["All", ...new Set(state.channels.map(c => c.category).filter(Boolean))];
+
+  /* =========================
+     YOUTUBE ID
+     ========================= */
+
+  function getYouTubeId(url) {
+    try {
+      const parsed = new URL(url);
+
+      if (parsed.hostname.includes("youtu.be")) {
+        return parsed.pathname.replace("/", "");
+      }
+
+      if (
+        parsed.hostname.includes("youtube.com")
+      ) {
+        if (parsed.pathname === "/watch") {
+          return parsed.searchParams.get("v");
+        }
+
+        if (
+          parsed.pathname.startsWith("/embed/")
+        ) {
+          return parsed.pathname.split("/embed/")[1];
+        }
+
+        if (
+          parsed.pathname.startsWith("/shorts/")
+        ) {
+          return parsed.pathname.split("/shorts/")[1];
+        }
+
+        if (
+          parsed.pathname.startsWith("/live/")
+        ) {
+          return parsed.pathname.split("/live/")[1];
+        }
+      }
+    } catch {}
+
+    return null;
   }
 
-  function renderCategories() {
-    categoryRow.innerHTML = categories().map(c =>
-      `<button class="category-btn ${c === state.category ? "active" : ""}" data-category="${escapeHtml(c)}">${escapeHtml(c)}</button>`
-    ).join("");
+
+  /* =========================
+     VIMEO ID
+     ========================= */
+
+  function getVimeoId(url) {
+    const match = String(url).match(
+      /vimeo\.com\/(?:video\/)?(\d+)/
+    );
+
+    return match ? match[1] : null;
   }
+
+
+  /* =========================
+     DAILYMOTION ID
+     ========================= */
+
+  function getDailymotionId(url) {
+    const match = String(url).match(
+      /(?:dailymotion\.com\/video\/|dai\.ly\/)([a-zA-Z0-9]+)/
+    );
+
+    return match ? match[1] : null;
+  }
+
+
+  /* =========================
+     FILTER CHANNELS
+     ========================= */
 
   function applyFilters() {
-    const q = state.search.trim().toLowerCase();
-    let list = state.channels.filter(c => {
-      const matchesCat = state.category === "All" || c.category === state.category;
-      const hay = `${c.name} ${c.category}`.toLowerCase();
-      return matchesCat && (!q || hay.includes(q));
-    });
+    let result = [...state.channels];
 
-    if (state.sort === "az") list.sort((a,b) => a.name.localeCompare(b.name));
-    if (state.sort === "category") list.sort((a,b) => `${a.category}${a.name}`.localeCompare(`${b.category}${b.name}`));
-    state.filtered = list;
+    /* Category */
+
+    if (state.category !== "All") {
+      result = result.filter(
+        (channel) =>
+          channel.category === state.category
+      );
+    }
+
+    /* Search */
+
+    if (state.search) {
+      const query = state.search.toLowerCase();
+
+      result = result.filter((channel) => {
+        return (
+          channel.name.toLowerCase().includes(query) ||
+          channel.category.toLowerCase().includes(query)
+        );
+      });
+    }
+
+    /* Sorting */
+
+    if (state.sort === "az") {
+      result.sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+    }
+
+    if (state.sort === "za") {
+      result.sort((a, b) =>
+        b.name.localeCompare(a.name)
+      );
+    }
+
+    if (state.sort === "category") {
+      result.sort((a, b) =>
+        a.category.localeCompare(b.category)
+      );
+    }
+
+    if (state.sort === "random") {
+      result.sort(() => Math.random() - 0.5);
+    }
+
+    state.filtered = result;
+
     renderChannels();
   }
 
-  function renderChannels() {
-    resultCount.textContent = `${state.filtered.length} channel${state.filtered.length === 1 ? "" : "s"}`;
-    emptyState.classList.toggle("hidden", state.filtered.length !== 0);
-    channelGrid.classList.toggle("hidden", state.filtered.length === 0);
 
-    channelGrid.innerHTML = state.filtered.map((c, i) => {
-      const logo = c.logo
-        ? `<img src="${escapeHtml(c.logo)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'logo-fallback\\'>${initials(c.name)}</div>'">`
-        : `<div class="logo-fallback">${initials(c.name)}</div>`;
-      return `<article class="channel-card" data-id="${escapeHtml(c.id)}" style="animation-delay:${Math.min(i * 25, 300)}ms">
-        <div class="logo-box">${logo}<span class="live-badge">LIVE</span></div>
-        <div class="card-body">
-          <div class="channel-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div>
-          <div class="channel-meta"><span>${escapeHtml(c.category)}</span><span class="play-mini">▶</span></div>
+  /* =========================
+     CATEGORIES
+     ========================= */
+
+  function getCategories() {
+    const categories = [
+      "All",
+      ...state.channels
+        .map((channel) => channel.category)
+        .filter(Boolean)
+    ];
+
+    return [...new Set(categories)];
+  }
+
+
+  function renderCategories() {
+    const container =
+      $("#categories") ||
+      $(".categories") ||
+      $("#categoryList");
+
+    if (!container) return;
+
+    const categories = getCategories();
+
+    container.innerHTML = categories
+      .map((category) => {
+        const active =
+          state.category === category
+            ? "active"
+            : "";
+
+        return `
+          <button
+            class="category-btn ${active}"
+            data-category="${escapeHTML(category)}"
+          >
+            ${escapeHTML(category)}
+          </button>
+        `;
+      })
+      .join("");
+
+    $$(".category-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.category =
+          button.dataset.category || "All";
+
+        renderCategories();
+        applyFilters();
+      });
+    });
+  }
+
+
+  /* =========================
+     CHANNEL CARD
+     ========================= */
+
+  function channelCard(channel, index) {
+    const initials = getInitials(channel.name);
+
+    const logo = channel.logo
+      ? `
+        <img
+          src="${escapeHTML(channel.logo)}"
+          alt="${escapeHTML(channel.name)}"
+          loading="lazy"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+        >
+        <span class="channel-fallback">
+          ${escapeHTML(initials)}
+        </span>
+      `
+      : `
+        <span class="channel-fallback">
+          ${escapeHTML(initials)}
+        </span>
+      `;
+
+    return `
+      <article
+        class="channel-card"
+        data-id="${escapeHTML(channel.id)}"
+        style="--delay:${Math.min(index * 35, 500)}ms"
+      >
+
+        <div class="channel-logo">
+          ${logo}
         </div>
-      </article>`;
-    }).join("");
+
+        <div class="channel-info">
+
+          <div class="channel-title-row">
+
+            <h3>
+              ${escapeHTML(channel.name)}
+            </h3>
+
+            <span class="live-badge">
+              LIVE
+            </span>
+
+          </div>
+
+          <p>
+            ${escapeHTML(channel.category)}
+          </p>
+
+        </div>
+
+        <button
+          class="watch-btn"
+          data-play="${escapeHTML(channel.id)}"
+          aria-label="Watch ${escapeHTML(channel.name)}"
+        >
+          ▶
+        </button>
+
+      </article>
+    `;
   }
 
-  function showToast(message) {
-    toast.textContent = message;
-    toast.classList.add("show");
-    clearTimeout(showToast.t);
-    showToast.t = setTimeout(() => toast.classList.remove("show"), 2200);
+
+  /* =========================
+     RENDER CHANNELS
+     ========================= */
+
+  function renderChannels() {
+    const container =
+      $("#channelGrid") ||
+      $(".channel-grid") ||
+      $("#channels");
+
+    if (!container) {
+      console.warn(
+        "Channel container not found."
+      );
+      return;
+    }
+
+    if (!state.filtered.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+
+          <div class="empty-icon">
+            📺
+          </div>
+
+          <h3>
+            No channels found
+          </h3>
+
+          <p>
+            Try another search or category.
+          </p>
+
+        </div>
+      `;
+
+      updateCount();
+      return;
+    }
+
+    container.innerHTML =
+      state.filtered
+        .map((channel, index) =>
+          channelCard(channel, index)
+        )
+        .join("");
+
+    $$("[data-play]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.play;
+
+        const channel =
+          state.channels.find(
+            (item) => item.id === id
+          );
+
+        if (channel) {
+          openPlayer(channel);
+        }
+      });
+    });
+
+    updateCount();
   }
 
-  function setLoading(on) { loading.classList.toggle("hidden", !on); }
-  function showError(message) {
-    setLoading(false);
-    errorText.textContent = message;
-    errorOverlay.classList.remove("hidden");
+
+  /* =========================
+     COUNT
+     ========================= */
+
+  function updateCount() {
+    const elements = [
+      $("#channelCount"),
+      $(".channel-count"),
+      $("#resultCount")
+    ];
+
+    elements.forEach((element) => {
+      if (element) {
+        element.textContent =
+          `${state.filtered.length} channel${state.filtered.length === 1 ? "" : "s"}`;
+      }
+    });
   }
+
+
+  /* =========================
+     PLAYER ELEMENTS
+     ========================= */
+
+  function getVideo() {
+    return (
+      $("#videoPlayer") ||
+      $("video")
+    );
+  }
+
+  function getModal() {
+    return (
+      $("#playerModal") ||
+      $(".player-modal") ||
+      $(".modal")
+    );
+  }
+
+
+  /* =========================
+     CLEAN PLAYER
+     ========================= */
 
   function destroyPlayers() {
-    if (state.hls) { try { state.hls.destroy(); } catch {} state.hls = null; }
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
-    iframe.src = "about:blank";
-    video.style.display = "none";
-    iframe.style.display = "none";
+    const video = getVideo();
+
+    if (state.hls) {
+      try {
+        state.hls.destroy();
+      } catch {}
+
+      state.hls = null;
+    }
+
+    if (state.dash) {
+      try {
+        state.dash.reset();
+      } catch {}
+
+      state.dash = null;
+    }
+
+    if (video) {
+      try {
+        video.pause();
+      } catch {}
+
+      video.removeAttribute("src");
+
+      try {
+        video.load();
+      } catch {}
+    }
   }
 
-  function youtubeEmbed(url) {
-    try {
-      const u = new URL(url);
-      if (u.hostname.includes("youtu.be")) return `https://www.youtube.com/embed/${u.pathname.slice(1)}?autoplay=1`;
-      if (u.hostname.includes("youtube.com")) {
-        const id = u.searchParams.get("v");
-        if (id) return `https://www.youtube.com/embed/${id}?autoplay=1`;
-        if (u.pathname.includes("/embed/")) return url;
-      }
-      if (u.hostname.includes("vimeo.com")) return `https://player.vimeo.com/video/${u.pathname.split("/").filter(Boolean).pop()}?autoplay=1`;
-      if (u.hostname.includes("dailymotion.com")) {
-        const id = u.pathname.split("/video/")[1]?.split("_")[0];
-        if (id) return `https://www.dailymotion.com/embed/video/${id}?autoplay=1`;
-      }
-    } catch {}
-    return url;
+
+  /* =========================
+     PLAYER STATUS
+     ========================= */
+
+  function showLoading(message = "Connecting...") {
+    const loader =
+      $("#playerLoading") ||
+      $(".player-loading");
+
+    if (!loader) return;
+
+    loader.innerHTML = `
+      <div class="loading-spinner"></div>
+      <span>${escapeHTML(message)}</span>
+    `;
+
+    loader.style.display = "flex";
   }
 
-  async function playChannel(channel) {
+
+  function hideLoading() {
+    const loader =
+      $("#playerLoading") ||
+      $(".player-loading");
+
+    if (loader) {
+      loader.style.display = "none";
+    }
+  }
+
+
+  function showError(message) {
+    hideLoading();
+
+    const errorBox =
+      $("#playerError") ||
+      $(".player-error");
+
+    if (!errorBox) {
+      alert(message);
+      return;
+    }
+
+    errorBox.innerHTML = `
+      <div class="error-icon">
+        ⚠️
+      </div>
+
+      <h3>
+        Playback Error
+      </h3>
+
+      <p>
+        ${escapeHTML(message)}
+      </p>
+
+      <button
+        type="button"
+        id="retryPlayer"
+      >
+        Try Again
+      </button>
+    `;
+
+    errorBox.style.display = "flex";
+
+    const retry =
+      $("#retryPlayer");
+
+    if (retry) {
+      retry.onclick = () => {
+        if (state.current) {
+          openPlayer(state.current);
+        }
+      };
+    }
+  }
+
+
+  function hideError() {
+    const errorBox =
+      $("#playerError") ||
+      $(".player-error");
+
+    if (errorBox) {
+      errorBox.style.display = "none";
+      errorBox.innerHTML = "";
+    }
+  }
+
+
+  /* =========================
+     PLAYER TITLE
+     ========================= */
+
+  function setPlayerTitle(channel) {
+    const title =
+      $("#playerTitle") ||
+      $(".player-title");
+
+    if (title) {
+      title.textContent = channel.name;
+    }
+
+    const category =
+      $("#playerCategory") ||
+      $(".player-category");
+
+    if (category) {
+      category.textContent =
+        channel.category;
+    }
+  }
+
+
+  /* =========================
+     OPEN PLAYER
+     ========================= */
+
+  function openPlayer(channel) {
     state.current = channel;
-    $("#playerTitle").textContent = channel.name;
-    $("#playerMeta").textContent = "Connecting...";
-    $("#playerCategory").textContent = channel.category;
-    $("#playerType").textContent = detectType(channel).toUpperCase();
-    playerModal.classList.remove("hidden");
-    playerModal.setAttribute("aria-hidden", "false");
-    document.body.style.overflow = "hidden";
 
+    const modal = getModal();
+
+    if (modal) {
+      modal.classList.add("active");
+      modal.classList.add("show");
+
+      modal.style.display = "flex";
+    }
+
+    setPlayerTitle(channel);
+
+    hideError();
     destroyPlayers();
-    errorOverlay.classList.add("hidden");
-    setLoading(true);
+    showLoading("Connecting to stream...");
 
-    const type = detectType(channel);
-    const url = channel.url;
+    const type =
+      detectType(channel);
+
+    if (type === "hls") {
+      playHLS(channel);
+      return;
+    }
+
+    if (type === "dash") {
+      playDASH(channel);
+      return;
+    }
 
     if (type === "embed") {
-      iframe.src = youtubeEmbed(url);
-      iframe.style.display = "block";
-      setLoading(false);
-      $("#playerMeta").textContent = "Embedded player";
+      playEmbed(channel);
+      return;
+    }
+
+    if (type === "video") {
+      playVideo(channel);
+      return;
+    }
+
+    showError(
+      "This stream type is not supported by this browser."
+    );
+  }
+
+
+  /* =========================
+     PLAY HLS
+     ========================= */
+
+  function playHLS(channel) {
+    const video = getVideo();
+
+    if (!video) {
+      showError(
+        "Video player element was not found."
+      );
       return;
     }
 
     video.style.display = "block";
 
-    if (type === "hls") {
-      if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = url;
-        video.addEventListener("loadedmetadata", onReady, {once:true});
-        video.addEventListener("error", onVideoError, {once:true});
+    /* Native HLS */
+
+    if (
+      video.canPlayType(
+        "application/vnd.apple.mpegurl"
+      )
+    ) {
+      video.src = channel.url;
+
+      video.onloadedmetadata = () => {
+        hideLoading();
+
         video.play().catch(() => {});
-      } else if (window.Hls && Hls.isSupported()) {
-        state.hls = new Hls({enableWorker:true, lowLatencyMode:true, backBufferLength:30});
-        state.hls.loadSource(url);
-        state.hls.attachMedia(video);
-        state.hls.on(Hls.Events.MANIFEST_PARSED, () => { onReady(); video.play().catch(() => {}); });
-        state.hls.on(Hls.Events.ERROR, (_, data) => {
-          if (data?.fatal) showError("The HLS stream rejected the connection or is unavailable. Check the stream URL and CORS.");
-        });
-      } else {
-        showError("This browser does not support HLS playback.");
+      };
+
+      video.onerror = () => {
+        showError(
+          "The HLS stream could not be played. The stream may be offline, blocked, or require CORS/HTTPS."
+        );
+      };
+
+      return;
+    }
+
+    /* HLS.js */
+
+    if (
+      typeof window.Hls === "undefined"
+    ) {
+      showError(
+        "HLS.js is not loaded. Check the HLS.js CDN script in index.html."
+      );
+      return;
+    }
+
+    if (
+      !window.Hls.isSupported()
+    ) {
+      showError(
+        "This browser does not support HLS playback."
+      );
+      return;
+    }
+
+    const hls =
+      new window.Hls({
+        enableWorker: true,
+
+        lowLatencyMode: true,
+
+        backBufferLength: 30,
+
+        maxBufferLength: 30,
+
+        liveSyncDurationCount: 3,
+
+        liveMaxLatencyDurationCount: 8
+      });
+
+    state.hls = hls;
+
+    hls.loadSource(channel.url);
+
+    hls.attachMedia(video);
+
+    hls.on(
+      window.Hls.Events.MANIFEST_PARSED,
+      () => {
+        hideLoading();
+
+        video
+          .play()
+          .catch(() => {});
       }
+    );
+
+    hls.on(
+      window.Hls.Events.ERROR,
+      (_, data) => {
+        console.warn(
+          "HLS error:",
+          data
+        );
+
+        if (
+          !data.fatal
+        ) {
+          return;
+        }
+
+        if (
+          data.type ===
+          window.Hls.ErrorTypes.NETWORK_ERROR
+        ) {
+          try {
+            hls.startLoad();
+            return;
+          } catch {}
+        }
+
+        if (
+          data.type ===
+          window.Hls.ErrorTypes.MEDIA_ERROR
+        ) {
+          try {
+            hls.recoverMediaError();
+            return;
+          } catch {}
+        }
+
+        showError(
+          "HLS playback failed. Check whether the M3U8 URL is active and allows browser CORS access."
+        );
+      }
+    );
+  }
+
+
+  /* =========================
+     PLAY DASH / MPD
+     ========================= */
+
+  function playDASH(channel) {
+    const video = getVideo();
+
+    if (!video) {
+      showError(
+        "Video player element was not found."
+      );
       return;
     }
 
-    if (type === "dash") {
-      showError("DASH (.mpd) playback needs a DASH player library. Use HLS/M3U8 or a browser-supported video URL for the simplest setup.");
+    if (
+      typeof window.dashjs === "undefined"
+    ) {
+      showError(
+        "DASH player is not loaded. Add dash.js to index.html."
+      );
       return;
     }
 
-    video.src = url;
-    video.addEventListener("loadedmetadata", onReady, {once:true});
-    video.addEventListener("error", onVideoError, {once:true});
-    video.play().catch(() => {});
+    const player =
+      window.dashjs.MediaPlayer().create();
+
+    state.dash = player;
+
+    player.initialize(
+      video,
+      channel.url,
+      true
+    );
+
+    player.on(
+      window.dashjs.MediaPlayer.events.STREAM_INITIALIZED,
+      () => {
+        hideLoading();
+      }
+    );
+
+    player.on(
+      window.dashjs.MediaPlayer.events.ERROR,
+      (event) => {
+        console.warn(
+          "DASH error:",
+          event
+        );
+
+        showError(
+          "DASH playback failed. The MPD stream may be offline, protected, or blocked by CORS."
+        );
+      }
+    );
   }
 
-  function onReady() {
-    setLoading(false);
-    errorOverlay.classList.add("hidden");
-    $("#playerMeta").textContent = "Live stream connected";
+
+  /* =========================
+     DIRECT VIDEO
+     ========================= */
+
+  function playVideo(channel) {
+    const video = getVideo();
+
+    if (!video) {
+      showError(
+        "Video player element was not found."
+      );
+      return;
+    }
+
+    video.style.display = "block";
+
+    video.src = channel.url;
+
+    video.onloadedmetadata = () => {
+      hideLoading();
+
+      video
+        .play()
+        .catch(() => {});
+    };
+
+    video.onerror = () => {
+      showError(
+        "This video cannot be played by the browser. Check the URL, format and server CORS settings."
+      );
+    };
   }
 
-  function onVideoError() {
-    showError("The browser could not play this stream. The URL may require authentication, CORS access, a supported codec, or may be offline.");
+
+  /* =========================
+     EMBED PLAYER
+     ========================= */
+
+  function playEmbed(channel) {
+    const video = getVideo();
+
+    if (video) {
+      video.style.display = "none";
+    }
+
+    let iframe =
+      document.getElementById(
+        "streamIframe"
+      );
+
+    if (!iframe) {
+      iframe =
+        document.createElement("iframe");
+
+      iframe.id =
+        "streamIframe";
+
+      iframe.style.width = "100%";
+      iframe.style.height = "100%";
+      iframe.style.border = "0";
+      iframe.style.display = "block";
+
+      const container =
+        video?.parentElement ||
+        document.body;
+
+      container.appendChild(iframe);
+    }
+
+    let embedUrl = channel.url;
+
+    const youtube =
+      getYouTubeId(channel.url);
+
+    const vimeo =
+      getVimeoId(channel.url);
+
+    const dailymotion =
+      getDailymotionId(channel.url);
+
+    if (youtube) {
+      embedUrl =
+        `https://www.youtube.com/embed/${youtube}?autoplay=1&rel=0`;
+    } else if (vimeo) {
+      embedUrl =
+        `https://player.vimeo.com/video/${vimeo}?autoplay=1`;
+    } else if (dailymotion) {
+      embedUrl =
+        `https://www.dailymotion.com/embed/video/${dailymotion}?autoplay=1`;
+    }
+
+    iframe.src = embedUrl;
+
+    iframe.onload = () => {
+      hideLoading();
+    };
+
+    iframe.onerror = () => {
+      showError(
+        "The embedded player could not be loaded."
+      );
+    };
   }
+
+
+  /* =========================
+     CLOSE PLAYER
+     ========================= */
 
   function closePlayer() {
     destroyPlayers();
-    playerModal.classList.add("hidden");
-    playerModal.setAttribute("aria-hidden", "true");
-    document.body.style.overflow = "";
+
+    const iframe =
+      document.getElementById(
+        "streamIframe"
+      );
+
+    if (iframe) {
+      iframe.remove();
+    }
+
+    const modal = getModal();
+
+    if (modal) {
+      modal.classList.remove("active");
+      modal.classList.remove("show");
+
+      modal.style.display = "none";
+    }
+
+    state.current = null;
+
+    hideLoading();
+    hideError();
   }
 
-  categoryRow.addEventListener("click", e => {
-    const btn = e.target.closest("[data-category]");
-    if (!btn) return;
-    state.category = btn.dataset.category;
+
+  /* =========================
+     SEARCH
+     ========================= */
+
+  function setupSearch() {
+    const inputs = [
+      $("#searchInput"),
+      $(".search-input"),
+      $("input[type='search']")
+    ].filter(Boolean);
+
+    inputs.forEach((input) => {
+      input.addEventListener(
+        "input",
+        () => {
+          state.search =
+            input.value.trim();
+
+          applyFilters();
+        }
+      );
+    });
+  }
+
+
+  /* =========================
+     SORT
+     ========================= */
+
+  function setupSort() {
+    const select =
+      $("#sortSelect") ||
+      $(".sort-select");
+
+    if (!select) return;
+
+    select.addEventListener(
+      "change",
+      () => {
+        state.sort =
+          select.value;
+
+        applyFilters();
+      }
+    );
+  }
+
+
+  /* =========================
+     THEME
+     ========================= */
+
+  function applyTheme() {
+    document.documentElement.dataset.theme =
+      state.theme;
+
+    document.body.dataset.theme =
+      state.theme;
+
+    const button =
+      $("#themeToggle") ||
+      $(".theme-toggle");
+
+    if (button) {
+      button.textContent =
+        state.theme === "dark"
+          ? "☀️"
+          : "🌙";
+    }
+  }
+
+
+  function setupTheme() {
+    applyTheme();
+
+    const button =
+      $("#themeToggle") ||
+      $(".theme-toggle");
+
+    if (!button) return;
+
+    button.addEventListener(
+      "click",
+      () => {
+        state.theme =
+          state.theme === "dark"
+            ? "light"
+            : "dark";
+
+        localStorage.setItem(
+          "iptv_theme",
+          state.theme
+        );
+
+        applyTheme();
+      }
+    );
+  }
+
+
+  /* =========================
+     RANDOM CHANNEL
+     ========================= */
+
+  function setupRandom() {
+    const buttons = [
+      $("#randomChannel"),
+      $(".random-channel")
+    ].filter(Boolean);
+
+    buttons.forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => {
+          if (!state.channels.length) {
+            return;
+          }
+
+          const channel =
+            state.channels[
+              Math.floor(
+                Math.random() *
+                state.channels.length
+              )
+            ];
+
+          openPlayer(channel);
+        }
+      );
+    });
+  }
+
+
+  /* =========================
+     CLOSE BUTTON
+     ========================= */
+
+  function setupClose() {
+    const buttons = [
+      $("#closePlayer"),
+      $(".close-player"),
+      "[data-close-player]"
+    ];
+
+    buttons.forEach((selector) => {
+      $$(selector).forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            closePlayer
+          );
+        }
+      );
+    });
+
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        if (
+          event.key === "Escape"
+        ) {
+          closePlayer();
+        }
+      }
+    );
+
+    const modal = getModal();
+
+    if (modal) {
+      modal.addEventListener(
+        "click",
+        (event) => {
+          if (
+            event.target === modal
+          ) {
+            closePlayer();
+          }
+        }
+      );
+    }
+  }
+
+
+  /* =========================
+     COPY STREAM
+     ========================= */
+
+  function setupCopy() {
+    const button =
+      $("#copyStream") ||
+      $(".copy-stream");
+
+    if (!button) return;
+
+    button.addEventListener(
+      "click",
+      async () => {
+        if (!state.current) return;
+
+        try {
+          await navigator.clipboard.writeText(
+            state.current.url
+          );
+
+          const old =
+            button.textContent;
+
+          button.textContent =
+            "Copied ✓";
+
+          setTimeout(() => {
+            button.textContent =
+              old;
+          }, 1500);
+        } catch {
+          alert(
+            state.current.url
+          );
+        }
+      }
+    );
+  }
+
+
+  /* =========================
+     OPEN STREAM
+     ========================= */
+
+  function setupOpenStream() {
+    const button =
+      $("#openStream") ||
+      $(".open-stream");
+
+    if (!button) return;
+
+    button.addEventListener(
+      "click",
+      () => {
+        if (!state.current) return;
+
+        window.open(
+          state.current.url,
+          "_blank",
+          "noopener,noreferrer"
+        );
+      }
+    );
+  }
+
+
+  /* =========================
+     LIVE STATUS
+     ========================= */
+
+  function setupVideoEvents() {
+    const video = getVideo();
+
+    if (!video) return;
+
+    video.addEventListener(
+      "waiting",
+      () => {
+        showLoading("Buffering...");
+      }
+    );
+
+    video.addEventListener(
+      "playing",
+      () => {
+        hideLoading();
+      }
+    );
+
+    video.addEventListener(
+      "canplay",
+      () => {
+        hideLoading();
+      }
+    );
+
+    video.addEventListener(
+      "stalled",
+      () => {
+        showLoading(
+          "Stream buffering..."
+        );
+      }
+    );
+  }
+
+
+  /* =========================
+     CONNECTION INFO
+     ========================= */
+
+  function showConnectionStatus() {
+    const elements = [
+      $("#connectionStatus"),
+      $(".connection-status")
+    ];
+
+    elements.forEach((element) => {
+      if (!element) return;
+
+      element.textContent =
+        navigator.onLine
+          ? "Online"
+          : "Offline";
+
+      element.classList.toggle(
+        "offline",
+        !navigator.onLine
+      );
+    });
+  }
+
+
+  window.addEventListener(
+    "online",
+    showConnectionStatus
+  );
+
+  window.addEventListener(
+    "offline",
+    showConnectionStatus
+  );
+
+
+  /* =========================
+     INITIALIZE
+     ========================= */
+
+  function init() {
+    console.log(
+      "Premium IPTV starting..."
+    );
+
+    state.channels =
+      safeChannels();
+
+    console.log(
+      "Channels loaded:",
+      state.channels
+    );
+
     renderCategories();
+
+    setupSearch();
+
+    setupSort();
+
+    setupTheme();
+
+    setupRandom();
+
+    setupClose();
+
+    setupCopy();
+
+    setupOpenStream();
+
+    setupVideoEvents();
+
+    showConnectionStatus();
+
     applyFilters();
-  });
 
-  channelGrid.addEventListener("click", e => {
-    const card = e.target.closest(".channel-card");
-    if (!card) return;
-    const c = state.channels.find(x => x.id === card.dataset.id);
-    if (c) playChannel(c);
-  });
+    console.log(
+      `Premium IPTV ready — ${state.channels.length} channels`
+    );
+  }
 
-  searchInput.addEventListener("input", e => {
-    state.search = e.target.value;
-    searchWrap.classList.toggle("has-value", !!state.search);
-    applyFilters();
-  });
 
-  $("#clearSearch").onclick = () => {
-    searchInput.value = "";
-    state.search = "";
-    searchWrap.classList.remove("has-value");
-    applyFilters();
-    searchInput.focus();
-  };
+  /* =========================
+     DOM READY
+     ========================= */
 
-  document.querySelectorAll(".sort-btn").forEach(btn => btn.onclick = () => {
-    document.querySelectorAll(".sort-btn").forEach(x => x.classList.remove("active"));
-    btn.classList.add("active");
-    state.sort = btn.dataset.sort;
-    applyFilters();
-  });
+  if (
+    document.readyState ===
+    "loading"
+  ) {
+    document.addEventListener(
+      "DOMContentLoaded",
+      init
+    );
+  } else {
+    init();
+  }
 
-  $("#browseBtn").onclick = () => $("#channelsSection").scrollIntoView({behavior:"smooth"});
-  $("#featuredBtn").onclick = () => {
-    state.sort = "default"; state.category = "All"; state.search = "";
-    searchInput.value = ""; searchWrap.classList.remove("has-value");
-    document.querySelectorAll(".sort-btn").forEach(x => x.classList.toggle("active", x.dataset.sort === "default"));
-    renderCategories(); applyFilters(); $("#channelsSection").scrollIntoView({behavior:"smooth"});
-  };
-  $("#homeBtn").onclick = e => { e.preventDefault(); window.scrollTo({top:0,behavior:"smooth"}); };
-  $("#refreshBtn").onclick = () => {
-    state.channels = safeChannels(); renderCategories(); applyFilters(); showToast("Channel list refreshed");
-  };
-  $("#resetFilters").onclick = () => {
-    state.category = "All"; state.search = ""; searchInput.value = ""; searchWrap.classList.remove("has-value");
-    renderCategories(); applyFilters();
-  };
-  $("#randomBtn").onclick = () => {
-    if (!state.filtered.length) return showToast("No channels available");
-    playChannel(state.filtered[Math.floor(Math.random() * state.filtered.length)]);
-  };
-  $("#themeBtn").onclick = () => {
-    state.theme = state.theme === "dark" ? "light" : "dark";
-    document.documentElement.classList.toggle("light", state.theme === "light");
-    localStorage.setItem("iptv_theme", state.theme);
-    $("#themeBtn").textContent = state.theme === "light" ? "☀" : "☾";
-  };
-  $("#closePlayer").onclick = closePlayer;
-  $(".modal-backdrop").onclick = closePlayer;
-  $("#retryBtn").onclick = () => state.current && playChannel(state.current);
-  $("#openStreamBtn").onclick = () => state.current && window.open(state.current.url, "_blank", "noopener,noreferrer");
-  $("#copyStreamBtn").onclick = async () => {
-    if (!state.current) return;
-    try { await navigator.clipboard.writeText(state.current.url); showToast("Stream link copied"); }
-    catch { showToast("Copy not available in this browser"); }
-  };
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && !playerModal.classList.contains("hidden")) closePlayer(); });
-
-  state.channels = safeChannels();
-  renderCategories();
-  applyFilters();
 })();
