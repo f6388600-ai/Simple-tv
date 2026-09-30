@@ -448,6 +448,8 @@
 
   function renderCategories() {
     const container =
+      $("#categoryRow") ||
+      $(".category-row") ||
       $("#categories") ||
       $(".categories") ||
       $("#categoryList");
@@ -501,12 +503,12 @@
           loading="lazy"
           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
         >
-        <span class="channel-fallback">
+        <span class="logo-fallback">
           ${escapeHTML(initials)}
         </span>
       `
       : `
-        <span class="channel-fallback">
+        <span class="logo-fallback">
           ${escapeHTML(initials)}
         </span>
       `;
@@ -518,15 +520,15 @@
         style="--delay:${Math.min(index * 35, 500)}ms"
       >
 
-        <div class="channel-logo">
+        <div class="logo-box">
           ${logo}
         </div>
 
-        <div class="channel-info">
+        <div class="card-body">
 
-          <div class="channel-title-row">
+          <div class="channel-meta">
 
-            <h3>
+            <h3 class="channel-name">
               ${escapeHTML(channel.name)}
             </h3>
 
@@ -536,14 +538,15 @@
 
           </div>
 
-          <p>
-            ${escapeHTML(channel.category)}
-          </p>
+          <div class="channel-meta">
+            <span>${escapeHTML(channel.category)}</span>
+            <span class="play-mini" aria-hidden="true">▶</span>
+          </div>
 
         </div>
 
         <button
-          class="watch-btn"
+          class="watch-btn compact-btn"
           data-play="${escapeHTML(channel.id)}"
           aria-label="Watch ${escapeHTML(channel.name)}"
         >
@@ -603,17 +606,20 @@
         .join("");
 
     $$("[data-play]").forEach((button) => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
         const id = button.dataset.play;
+        const channel = state.channels.find((item) => item.id === id);
+        if (channel) openPlayer(channel);
+      });
+    });
 
-        const channel =
-          state.channels.find(
-            (item) => item.id === id
-          );
-
-        if (channel) {
-          openPlayer(channel);
-        }
+    $$(".channel-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const channel = state.channels.find(
+          (item) => item.id === card.dataset.id
+        );
+        if (channel) openPlayer(channel);
       });
     });
 
@@ -685,15 +691,17 @@
     }
 
     if (video) {
-      try {
-        video.pause();
-      } catch {}
-
+      try { video.pause(); } catch {}
       video.removeAttribute("src");
+      video.removeAttribute("poster");
+      try { video.load(); } catch {}
+      video.style.display = "block";
+    }
 
-      try {
-        video.load();
-      } catch {}
+    const iframe = $("#embedPlayer");
+    if (iframe) {
+      iframe.src = "about:blank";
+      iframe.style.display = "none";
     }
   }
 
@@ -704,6 +712,7 @@
 
   function showLoading(message = "Connecting...") {
     const loader =
+      $("#loadingOverlay") ||
       $("#playerLoading") ||
       $(".player-loading");
 
@@ -714,17 +723,20 @@
       <span>${escapeHTML(message)}</span>
     `;
 
+    loader.classList.remove("hidden");
     loader.style.display = "flex";
   }
 
 
   function hideLoading() {
     const loader =
+      $("#loadingOverlay") ||
       $("#playerLoading") ||
       $(".player-loading");
 
     if (loader) {
       loader.style.display = "none";
+      loader.classList.add("hidden");
     }
   }
 
@@ -733,6 +745,7 @@
     hideLoading();
 
     const errorBox =
+      $("#errorOverlay") ||
       $("#playerError") ||
       $(".player-error");
 
@@ -762,6 +775,7 @@
       </button>
     `;
 
+    errorBox.classList.remove("hidden");
     errorBox.style.display = "flex";
 
     const retry =
@@ -779,11 +793,13 @@
 
   function hideError() {
     const errorBox =
+      $("#errorOverlay") ||
       $("#playerError") ||
       $(".player-error");
 
     if (errorBox) {
       errorBox.style.display = "none";
+      errorBox.classList.add("hidden");
       errorBox.innerHTML = "";
     }
   }
@@ -823,16 +839,28 @@
     const modal = getModal();
 
     if (modal) {
-      modal.classList.add("active");
-      modal.classList.add("show");
-
-      modal.style.display = "flex";
+      modal.classList.remove("hidden");
+      modal.classList.add("active", "show");
+      modal.style.display = "grid";
+      modal.setAttribute("aria-hidden", "false");
     }
 
     setPlayerTitle(channel);
 
+    const meta = $("#playerMeta");
+    const playerType = $("#playerType");
+    if (meta) meta.textContent = channel.url;
+    if (playerType) playerType.textContent = detectType(channel).toUpperCase();
+
     hideError();
     destroyPlayers();
+
+    // Browsers block insecure HTTP media when this site is served over HTTPS.
+    if (location.protocol === "https:" && /^http:\/\//i.test(channel.url)) {
+      showError("This stream uses HTTP. An HTTPS website cannot play it directly because the browser blocks mixed-content media. Use an HTTPS stream or a server-side HTTPS proxy.");
+      return;
+    }
+
     showLoading("Connecting to stream...");
 
     const type =
@@ -1095,70 +1123,35 @@
 
   function playEmbed(channel) {
     const video = getVideo();
+    const iframe = $("#embedPlayer");
 
     if (video) {
       video.style.display = "none";
     }
 
-    let iframe =
-      document.getElementById(
-        "streamIframe"
-      );
-
     if (!iframe) {
-      iframe =
-        document.createElement("iframe");
-
-      iframe.id =
-        "streamIframe";
-
-      iframe.style.width = "100%";
-      iframe.style.height = "100%";
-      iframe.style.border = "0";
-      iframe.style.display = "block";
-
-      const container =
-        video?.parentElement ||
-        document.body;
-
-      container.appendChild(iframe);
+      showError("Embedded player element was not found.");
+      return;
     }
 
+    iframe.style.display = "block";
+
     let embedUrl = channel.url;
-
-    const youtube =
-      getYouTubeId(channel.url);
-
-    const vimeo =
-      getVimeoId(channel.url);
-
-    const dailymotion =
-      getDailymotionId(channel.url);
+    const youtube = getYouTubeId(channel.url);
+    const vimeo = getVimeoId(channel.url);
+    const dailymotion = getDailymotionId(channel.url);
 
     if (youtube) {
-      embedUrl =
-        `https://www.youtube.com/embed/${youtube}?autoplay=1&rel=0`;
+      embedUrl = `https://www.youtube.com/embed/${youtube}?autoplay=1&rel=0`;
     } else if (vimeo) {
-      embedUrl =
-        `https://player.vimeo.com/video/${vimeo}?autoplay=1`;
+      embedUrl = `https://player.vimeo.com/video/${vimeo}?autoplay=1`;
     } else if (dailymotion) {
-      embedUrl =
-        `https://www.dailymotion.com/embed/video/${dailymotion}?autoplay=1`;
+      embedUrl = `https://www.dailymotion.com/embed/video/${dailymotion}?autoplay=1`;
     }
 
     iframe.src = embedUrl;
-
-    iframe.onload = () => {
-      hideLoading();
-    };
-
-    iframe.onerror = () => {
-      showError(
-        "The embedded player could not be loaded."
-      );
-    };
+    iframe.onload = () => hideLoading();
   }
-
 
   /* =========================
      CLOSE PLAYER
@@ -1167,22 +1160,13 @@
   function closePlayer() {
     destroyPlayers();
 
-    const iframe =
-      document.getElementById(
-        "streamIframe"
-      );
-
-    if (iframe) {
-      iframe.remove();
-    }
-
     const modal = getModal();
 
     if (modal) {
-      modal.classList.remove("active");
-      modal.classList.remove("show");
-
+      modal.classList.remove("active", "show");
+      modal.classList.add("hidden");
       modal.style.display = "none";
+      modal.setAttribute("aria-hidden", "true");
     }
 
     state.current = null;
@@ -1210,6 +1194,11 @@
           state.search =
             input.value.trim();
 
+          input.parentElement?.classList.toggle(
+            "has-value",
+            Boolean(state.search)
+          );
+
           applyFilters();
         }
       );
@@ -1222,44 +1211,118 @@
      ========================= */
 
   function setupSort() {
-    const select =
-      $("#sortSelect") ||
-      $(".sort-select");
-
-    if (!select) return;
-
-    select.addEventListener(
-      "change",
-      () => {
-        state.sort =
-          select.value;
-
+    const select = $("#sortSelect") || $(".sort-select");
+    if (select) {
+      select.addEventListener("change", () => {
+        state.sort = select.value;
         applyFilters();
-      }
-    );
+      });
+    }
+
+    $$("[data-sort]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.sort = button.dataset.sort || "default";
+        $$("[data-sort]").forEach((b) => b.classList.toggle(
+          "active", b === button
+        ));
+        applyFilters();
+      });
+    });
   }
 
+
+  /* =========================
+     HEADER / HERO CONTROLS
+     ========================= */
+
+  function setupUIControls() {
+    const scrollToChannels = () => {
+      $("#channelsSection")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    };
+
+    $("#browseBtn")?.addEventListener("click", scrollToChannels);
+    $("#featuredBtn")?.addEventListener("click", () => {
+      state.category = "All";
+      state.search = "";
+      const input = $("#searchInput");
+      if (input) input.value = "";
+      applyFilters();
+      scrollToChannels();
+    });
+
+    $("#refreshBtn")?.addEventListener("click", () => {
+      state.channels = safeChannels();
+      renderCategories();
+      applyFilters();
+      showToast("Channels refreshed");
+    });
+
+    $("#resetFilters")?.addEventListener("click", () => {
+      state.category = "All";
+      state.search = "";
+      state.sort = "default";
+      const input = $("#searchInput");
+      if (input) input.value = "";
+      $$("[data-sort]").forEach((b) => b.classList.toggle(
+        "active", (b.dataset.sort || "default") === "default"
+      ));
+      renderCategories();
+      applyFilters();
+    });
+
+    $("#clearSearch")?.addEventListener("click", () => {
+      const input = $("#searchInput");
+      if (input) {
+        input.value = "";
+        state.search = "";
+        applyFilters();
+        input.focus();
+      }
+    });
+
+    $("#homeBtn")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      window.scrollTo({top: 0, behavior: "smooth"});
+    });
+  }
+
+  function showToast(message) {
+    const toast = $("#toast");
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.add("show");
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(() => {
+      toast.classList.remove("show");
+    }, 1800);
+  }
 
   /* =========================
      THEME
      ========================= */
 
   function applyTheme() {
-    document.documentElement.dataset.theme =
-      state.theme;
+    document.documentElement.classList.toggle(
+      "light",
+      state.theme === "light"
+    );
 
     document.body.dataset.theme =
       state.theme;
 
     const button =
+      $("#themeBtn") ||
       $("#themeToggle") ||
       $(".theme-toggle");
 
     if (button) {
       button.textContent =
         state.theme === "dark"
-          ? "☀️"
-          : "🌙";
+          ? "☀"
+          : "☾";
     }
   }
 
@@ -1268,6 +1331,7 @@
     applyTheme();
 
     const button =
+      $("#themeBtn") ||
       $("#themeToggle") ||
       $(".theme-toggle");
 
@@ -1298,6 +1362,7 @@
 
   function setupRandom() {
     const buttons = [
+      $("#randomBtn"),
       $("#randomChannel"),
       $(".random-channel")
     ].filter(Boolean);
@@ -1365,7 +1430,8 @@
         "click",
         (event) => {
           if (
-            event.target === modal
+            event.target === modal ||
+            event.target.matches?.(".modal-backdrop,[data-close='1']")
           ) {
             closePlayer();
           }
@@ -1381,6 +1447,7 @@
 
   function setupCopy() {
     const button =
+      $("#copyStreamBtn") ||
       $("#copyStream") ||
       $(".copy-stream");
 
@@ -1422,6 +1489,7 @@
 
   function setupOpenStream() {
     const button =
+      $("#openStreamBtn") ||
       $("#openStream") ||
       $(".open-stream");
 
@@ -1542,6 +1610,8 @@
     setupSearch();
 
     setupSort();
+
+    setupUIControls();
 
     setupTheme();
 
