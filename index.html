@@ -2,685 +2,132 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-  >
-
-  <meta
-    name="theme-color"
-    content="#07090d"
-  >
-
-  <meta
-    name="description"
-    content="StreamHub IPTV - Premium live TV web player"
-  >
-
-  <meta
-    name="color-scheme"
-    content="dark light"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#07090d">
+  <meta name="description" content="StreamHub IPTV - Premium live TV web player">
   <title>StreamHub IPTV</title>
-
-  <!-- Performance -->
-  <link
-    rel="preconnect"
-    href="https://cdn.jsdelivr.net"
-  >
-
-  <link
-    rel="dns-prefetch"
-    href="//cdn.jsdelivr.net"
-  >
-
-  <!-- Main CSS -->
-  <link
-    rel="stylesheet"
-    href="style.css"
-  >
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-
-  <!-- =====================================================
-       APP
-       ===================================================== -->
-
   <div id="app">
-
-    <!-- ===================================================
-         HEADER
-         =================================================== -->
-
     <header class="topbar">
-
-      <!-- BRAND -->
-
-      <a
-        class="brand"
-        href="#"
-        id="homeBtn"
-        aria-label="StreamHub Home"
-      >
-
-        <span class="brand-mark">
-          ▶
-        </span>
-
-        <span>
-          Stream<span>Hub</span>
-        </span>
-
+      <a class="brand" href="#" id="homeBtn">
+        <span class="brand-mark">▶</span>
+        <span>Stream<span>Hub</span></span>
       </a>
-
-
-      <!-- SEARCH -->
-
       <div class="search-wrap">
-
-        <span
-          class="search-icon"
-          aria-hidden="true"
-        >
-          ⌕
-        </span>
-
-        <input
-          id="searchInput"
-          type="search"
-          autocomplete="off"
-          autocapitalize="off"
-          spellcheck="false"
-          placeholder="Search channels..."
-          aria-label="Search channels"
-        >
-
-        <button
-          id="clearSearch"
-          class="clear-search"
-          type="button"
-          aria-label="Clear search"
-        >
-          ×
-        </button>
-
+        <span class="search-icon">⌕</span>
+        <input id="searchInput" type="search" autocomplete="off" placeholder="Search channels...">
+        <button id="clearSearch" class="clear-search" type="button">×</button>
       </div>
-
-
-      <!-- HEADER ACTIONS -->
-
       <div class="header-actions">
-
-        <button
-          class="icon-btn"
-          id="themeBtn"
-          type="button"
-          title="Toggle theme"
-          aria-label="Toggle theme"
-        >
-          ☾
-        </button>
-
-        <button
-          class="icon-btn"
-          id="randomBtn"
-          type="button"
-          title="Play random channel"
-          aria-label="Play random channel"
-        >
-          ⤨
-        </button>
-
+        <button class="icon-btn" id="themeBtn" type="button" title="Toggle theme">☾</button>
+        <button class="icon-btn" id="randomBtn" type="button" title="Play random channel">⤨</button>
       </div>
-
     </header>
 
-
-    <!-- ===================================================
-         MAIN
-         =================================================== -->
-
     <main>
-
-      <!-- =================================================
-           HERO
-           ================================================= -->
-
       <section class="hero">
-
         <div class="hero-copy">
-
-          <div class="live-pill">
-
-            <i></i>
-
-            LIVE TV
-
-          </div>
-
-
-          <h1>
-            Watch your favorite<br>
-            <span>channels anywhere.</span>
-          </h1>
-
-
-          <p>
-            Fast, clean and responsive IPTV player
-            with instant search and smart stream detection.
-          </p>
-
-
+          <div class="live-pill"><i></i>LIVE TV</div>
+          <h1>Watch your favorite<br><span>channels anywhere.</span></h1>
+          <p>Fast, clean and responsive IPTV player with instant search and smart stream detection.</p>
           <div class="hero-actions">
-
-            <button
-              id="browseBtn"
-              class="primary-btn"
-              type="button"
-            >
-              Browse channels
-              <b>↓</b>
-            </button>
-
-
-            <button
-              id="featuredBtn"
-              class="ghost-btn"
-              type="button"
-            >
-              Featured
-              <b>✦</b>
-            </button>
-
+            <button id="browseBtn" class="primary-btn" type="button">Browse channels <b>↓</b></button>
+            <button id="featuredBtn" class="ghost-btn" type="button">Featured <b>✦</b></button>
           </div>
-
         </div>
-
-
-        <!-- HERO ART -->
-
         <div class="hero-art">
-
           <div class="glow"></div>
-
-
           <div class="screen-card">
-
-            <div class="screen-top">
-
-              <span></span>
-              <span></span>
-              <span></span>
-
-              <em>
-                LIVE
-              </em>
-
-            </div>
-
-
-            <div class="screen-play">
-              ▶
-            </div>
-
-
-            <div class="screen-lines">
-
-              <i></i>
-              <i></i>
-              <i></i>
-
-            </div>
-
+            <div class="screen-top"><span></span><span></span><span></span><em>LIVE</em></div>
+            <div class="screen-play">▶</div>
+            <div class="screen-lines"><i></i><i></i><i></i></div>
           </div>
-
-
-          <div class="float-card fc-one">
-
-            ◉
-
-            <b>
-              HD
-            </b>
-
-            <small>
-              Quality
-            </small>
-
-          </div>
-
-
-          <div class="float-card fc-two">
-
-            ⚡
-
-            <b>
-              Fast
-            </b>
-
-            <small>
-              Playback
-            </small>
-
-          </div>
-
         </div>
-
       </section>
 
-
-      <!-- =================================================
-           CHANNELS
-           ================================================= -->
-
-      <section
-        class="content"
-        id="channelsSection"
-      >
-
-        <!-- SECTION HEADER -->
-
+      <section class="content" id="channelsSection">
         <div class="section-head">
-
           <div>
-
-            <div class="eyebrow">
-              CHANNELS
-            </div>
-
-            <h2>
-              Explore live TV
-            </h2>
-
+            <div class="eyebrow">CHANNELS</div>
+            <h2>Explore live TV</h2>
           </div>
-
-
-          <div
-            class="result-count"
-            id="resultCount"
-          >
-            0 channels
-          </div>
-
+          <div class="result-count" id="resultCount">0 channels</div>
         </div>
 
-
-        <!-- CATEGORIES -->
-
-        <div
-          class="category-row"
-          id="categoryRow"
-        ></div>
-
-
-        <!-- TOOLBAR -->
+        <div class="category-row" id="categoryRow"></div>
 
         <div class="toolbar">
-
           <div class="toolbar-left">
-
-            <button
-              class="sort-btn active"
-              data-sort="default"
-              type="button"
-            >
-              Recommended
-            </button>
-
-
-            <button
-              class="sort-btn"
-              data-sort="az"
-              type="button"
-            >
-              A–Z
-            </button>
-
-
-            <button
-              class="sort-btn"
-              data-sort="category"
-              type="button"
-            >
-              Category
-            </button>
-
+            <button class="sort-btn active" data-sort="default" type="button">Recommended</button>
+            <button class="sort-btn" data-sort="az" type="button">A–Z</button>
+            <button class="sort-btn" data-sort="category" type="button">Category</button>
           </div>
-
-
-          <button
-            class="compact-btn"
-            id="refreshBtn"
-            type="button"
-          >
-            ↻ Refresh
-          </button>
-
+          <button class="compact-btn" id="refreshBtn" type="button">↻ Refresh</button>
         </div>
 
+        <div id="channelGrid" class="channel-grid"></div>
 
-        <!-- CHANNEL GRID -->
-
-        <div
-          id="channelGrid"
-          class="channel-grid"
-        ></div>
-
-
-        <!-- EMPTY STATE -->
-
-        <div
-          id="emptyState"
-          class="empty-state hidden"
-        >
-
-          <div class="empty-icon">
-            ⌕
-          </div>
-
-
-          <h3>
-            No channels found
-          </h3>
-
-
-          <p>
-            Try another search term or category.
-          </p>
-
-
-          <button
-            id="resetFilters"
-            class="primary-btn small"
-            type="button"
-          >
-            Reset filters
-          </button>
-
+        <div id="emptyState" class="empty-state hidden">
+          <div class="empty-icon">⌕</div>
+          <h3>No channels found</h3>
+          <p>Try another search term or category.</p>
+          <button id="resetFilters" class="primary-btn small" type="button">Reset filters</button>
         </div>
-
       </section>
-
     </main>
 
-
-    <!-- ===================================================
-         FOOTER
-         =================================================== -->
-
     <footer>
-
-      <span>
-        StreamHub IPTV
-      </span>
-
-      <span>
-        •
-      </span>
-
-      <span>
-        Built for web & mobile
-      </span>
-
+      <span>StreamHub IPTV</span> • <span>Built for web & mobile</span>
     </footer>
-
   </div>
 
-
-  <!-- =====================================================
-       PLAYER MODAL
-       ===================================================== -->
-
-  <div
-    id="playerModal"
-    class="modal hidden"
-    aria-hidden="true"
-  >
-
-    <!-- BACKDROP -->
-
-    <div
-      class="modal-backdrop"
-      data-close="1"
-      aria-hidden="true"
-    ></div>
-
-
-    <!-- PLAYER -->
-
-    <section
-      class="player-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="playerTitle"
-    >
-
-      <!-- PLAYER HEADER -->
-
+  <div id="playerModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" aria-hidden="true"></div>
+    <section class="player-modal" role="dialog" aria-modal="true">
       <div class="player-head">
-
         <div>
-
-          <div class="player-live">
-
-            <i></i>
-
-            LIVE
-
-          </div>
-
-
-          <h3 id="playerTitle">
-            Channel
-          </h3>
-
-
-          <small id="playerMeta">
-            Loading stream...
-          </small>
-
+          <div class="player-live"><i></i>LIVE</div>
+          <h3 id="playerTitle">Channel</h3>
+          <small id="playerMeta">Loading stream...</small>
         </div>
-
-
-        <button
-          id="closePlayer"
-          class="close-btn"
-          type="button"
-          aria-label="Close player"
-        >
-          ×
-        </button>
-
+        <button id="closePlayer" class="close-btn" type="button">×</button>
       </div>
 
-
-      <!-- =================================================
-           VIDEO SHELL
-           ================================================= -->
-
-      <div
-        class="video-shell"
-        id="videoShell"
-      >
-
-        <!-- LOADING -->
-
-        <div
-          id="loadingOverlay"
-          class="loading-overlay"
-        >
-
+      <div class="video-shell" id="videoShell">
+        <div id="loadingOverlay" class="loading-overlay">
           <div class="loader"></div>
-
-
-          <strong>
-            Connecting to stream
-          </strong>
-
-
-          <span>
-            Please wait...
-          </span>
-
+          <strong>Connecting to stream</strong>
+          <span>Please wait...</span>
         </div>
 
+        <video id="videoPlayer" controls playsinline preload="metadata" crossorigin="anonymous"></video>
+        <iframe id="embedPlayer" title="StreamHub embedded player" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
 
-        <!-- VIDEO PLAYER -->
-
-        <video
-          id="videoPlayer"
-          controls
-          playsinline
-          preload="metadata"
-          crossorigin="anonymous"
-        ></video>
-
-
-        <!-- EMBED PLAYER -->
-
-        <iframe
-          id="embedPlayer"
-          title="StreamHub embedded player"
-          allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
-          allowfullscreen
-          loading="eager"
-          referrerpolicy="strict-origin-when-cross-origin"
-        ></iframe>
-
-
-        <!-- ERROR -->
-
-        <div
-          id="errorOverlay"
-          class="error-overlay hidden"
-        >
-
-          <div class="error-icon">
-            !
-          </div>
-
-
-          <h3>
-            Stream unavailable
-          </h3>
-
-
-          <p id="errorText">
-            This stream could not be played
-            in your browser.
-          </p>
-
-
+        <div id="errorOverlay" class="error-overlay hidden">
+          <div class="error-icon">!</div>
+          <h3>Stream unavailable</h3>
+          <p id="errorText">This stream could not be played.</p>
           <div class="error-actions">
-
-            <button
-              id="retryBtn"
-              class="primary-btn small"
-              type="button"
-            >
-              Try again
-            </button>
-
-
-            <button
-              id="openStreamBtn"
-              class="ghost-btn small"
-              type="button"
-            >
-              Open link
-            </button>
-
+            <button id="retryBtn" class="primary-btn small" type="button">Try again</button>
+            <button id="openStreamBtn" class="ghost-btn small" type="button">Open link</button>
           </div>
-
         </div>
-
       </div>
-
-
-      <!-- =================================================
-           PLAYER FOOTER
-           ================================================= -->
 
       <div class="player-foot">
-
         <div class="now-info">
-
-          <span id="playerCategory">
-            —
-          </span>
-
-          <span>
-            •
-          </span>
-
-          <span id="playerType">
-            AUTO
-          </span>
-
+          <span id="playerCategory">—</span> • <span id="playerType">AUTO</span>
         </div>
-
-
-        <button
-          id="copyStreamBtn"
-          class="compact-btn"
-          type="button"
-        >
-          Copy stream
-        </button>
-
+        <button id="copyStreamBtn" class="compact-btn" type="button">Copy stream</button>
       </div>
-
     </section>
-
   </div>
 
-
-  <!-- =====================================================
-       TOAST
-       ===================================================== -->
-
-  <div
-    id="toast"
-    class="toast"
-    role="status"
-    aria-live="polite"
-  ></div>
-
-
-  <!-- =====================================================
-       EXTERNAL PLAYER LIBRARIES
-       ===================================================== -->
-
-  <!-- HLS / M3U8 -->
-
-  <script
-    src="https://cdn.jsdelivr.net/npm/hls.js@1.6.2/dist/hls.min.js"
-  ></script>
-
-
-  <!-- DASH / MPD -->
-
-  <script
-    src="https://cdn.dashjs.org/latest/dash.all.min.js"
-  ></script>
-
-
-  <!-- =====================================================
-       CHANNEL DATA
-       MUST LOAD BEFORE APP.JS
-       ===================================================== -->
-
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.2/dist/hls.min.js"></script>
+  <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
   <script src="channels.js"></script>
-
-
-  <!-- =====================================================
-       MAIN APPLICATION
-       ===================================================== -->
-
   <script src="app.js"></script>
-
 </body>
 </html>
